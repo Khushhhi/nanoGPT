@@ -1,6 +1,6 @@
 import torch 
 import torch.nn as nn 
-from torch.nn import functional as f 
+from torch.nn import functional as F
 torch.manual_seed(1337)
 
 #tokenization - process of converting a sequence of strings into integers from the given vocabulary
@@ -80,3 +80,86 @@ with open('input.txt', 'r', encoding='utf-8') as f:
 
 #using the bigram neural network to feed the context data
 
+class BigramLanguageModel(nn.Module):
+    
+ 
+        '''
+        each token directly reads off the logits for the next token from a lookup table
+        logits = scores for the next character in sequence
+
+        token_embedding table = vocab * vocab (in this case 65*65)
+        when input is passed, every single input will refer to the embedding table and pluck out the corresponding row of the index. 
+        Pytorch arranges all of this in a batch (4) by time (8) by channel tensor (OR VOCAB SIZE = 65)(B,T,C)
+        
+        Predicting what comes next with the invidividual identity of a single token.
+        '''
+        def __init__(self, vocab_size):
+            super().__init__()
+            self.token_embedding_table = nn.Embedding(vocab_size, vocab_size)
+
+        def forward(self, idx, targets=None):
+             
+            #idx and targets are both (B,T) tensor of integers
+            logits = self.token_embedding_table(idx) # (B,T,C)
+
+            if targets is None:
+                loss = None
+            else:
+                B,T,C = logits.shape
+                logits = logits.view(B*T,C) #stretching out the array so that it's two dimensional and C can be the second dimension
+
+                #we need targets to be one-dimensional
+                targets = targets.view(B*T)
+                # loss function for evaluation
+                loss = F.cross_entropy(logits, targets)
+            return logits, loss
+        
+        #done determining the quality of the model
+
+        #now generating the model 
+        def generate(self, idx, max_new_tokens): #idx = current context of characters in some batch
+             #idx is (B,T) array of indices in the current context
+            for _ in range(max_new_tokens):
+                #get the predictions
+                logits, loss = self(idx) #loss will be ignored
+                #focus only on the last time step
+                logits = logits[:,-1,:] #becomes (B,C)
+                #apply softmax to get probabilities 
+                probs = F.softmax(logits, dim=-1) #(B,C)
+                # sample from the distribution 
+                idx_next = torch.multinomial(probs, num_samples=1) #(B,1)
+                # append sampled index to the running sequence 
+                idx = torch.cat((idx,idx_next), dim=1) # (B, T+1)
+            return idx
+
+m = BigramLanguageModel(vocab_size)
+logits, loss = m(xb, yb)
+# print(logits.shape) #won't run with logits as (B,T,C) because PyTorch expects Channel (C) as second dimension so a (B,C,T)
+# print(loss)
+
+# idx = 
+# print(decode(m.generate(idx=torch.zeros((1,1), dtype=torch.long), max_new_tokens=100)[0].tolist()))
+
+#now training the model by creating a PyTorch optimizer
+optimizer = torch.optim.AdamW(m.parameters(), lr=1e-3)
+
+batch_size = 32
+for steps in range(100000):
+
+    #sample a batch of data
+    xb, yb = get_batch('train')
+
+    #evaluate the loss
+    logits, loss = m(xb, yb)
+    optimizer.zero_grad(set_to_none=True)
+    loss.backward()
+    optimizer.step()
+
+print(loss.item())
+print(decode(m.generate(idx=torch.zeros((1,1), dtype=torch.long), max_new_tokens=100)[0].tolist()))
+
+
+
+
+
+        
