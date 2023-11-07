@@ -1,7 +1,7 @@
 import torch 
 import torch.nn as nn 
 from torch.nn import functional as F
-torch.manual_seed(1337)
+
 
 
 #hyperparameters
@@ -93,14 +93,15 @@ with open('input.txt', 'r', encoding='utf-8') as f:
         out={}
         model.eval()
         for split in ['train', 'val']:
-            losses = torch.zeroes(eval_iters)
+            losses = torch.zeros(eval_iters)
             for k in range(eval_iters):
                 X,Y = get_batch(split)
                 logits, loss = model(X,Y)
                 losses[k] = loss.item()
             out[split] = losses.mean()
-            model.train()
-            return out
+        model.train()
+        return out
+        
 #using the bigram neural network to feed the context data
 class BigramLanguageModel(nn.Module):
     
